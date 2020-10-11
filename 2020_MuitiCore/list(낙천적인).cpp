@@ -47,6 +47,16 @@ public:
 		_head.next = &_tail;
 	}
 
+	bool is_valided(Node* pred, Node* curr) {
+		Node *node = _head.next;
+		while (node->key <= pred->key) {
+			if (node == pred) 
+				return pred->next == curr;
+			node = node->next;
+		}
+		return false;
+	}
+
 	bool Add(int key)
 	{
 		Node* pred, * curr;
@@ -61,22 +71,24 @@ public:
 
 		pred->Lock();
 		curr->Lock();
-
-		if (key == curr->key)
-		{
-			pred->Unlock();
-			curr->Unlock();
-			return false;
+		if (is_valided(pred, curr)) {
+			if (curr->key == key) {
+				pred->Unlock();
+				curr->Unlock();
+				return false;
+			}
+			else {
+				Node* node = new Node(key);
+				node->next = curr;
+				pred->next = node;
+				pred->Unlock();
+				curr->Unlock();
+				return true;
+			}
 		}
-		else
-		{
-			Node* node = new Node(key);
-			node->next = curr;
-			pred->next = node;
-			pred->Unlock();
-			curr->Unlock();
-			return true;
-		}
+		pred->Unlock();
+		curr->Unlock();
+		return false;
 	}
 
 	bool Remove(int key)
@@ -94,21 +106,22 @@ public:
 		pred->Lock();
 		curr->Lock();
 
-		if (key == curr->key)
-		{
-			pred->next = curr->next;
-			pred->Unlock();
-			curr->Unlock();
-			delete curr;
-			return true;
+		if (is_valided(pred, curr)) {
+			if (curr->key == key) {
+				pred->next = curr->next;
+				pred->Unlock();
+				curr->Unlock();
+				return true;
+			}
+			else {
+				pred->Unlock();
+				curr->Unlock();
+				return false;
+			}
 		}
-		else
-		{
-			pred->Unlock();
-			curr->Unlock();
-			return false;
-		}
-
+		pred->Unlock();
+		curr->Unlock();
+		return false;
 	}
 
 	bool Contains(int key)
@@ -126,17 +139,14 @@ public:
 		pred->Lock();
 		curr->Lock();
 		
-		if (key == curr->key)
-		{
+		if (is_valided(pred, curr)) {
 			pred->Unlock();
 			curr->Unlock();
-			return true;
+			return curr->key == key;
 		}
-		else {
-			pred->Unlock();
-			curr->Unlock();
-			return false;
-		}
+		pred->Unlock();
+		curr->Unlock();
+		return false;
 	}
 
 	void Display20() {
