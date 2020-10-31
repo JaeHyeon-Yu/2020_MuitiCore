@@ -1,10 +1,11 @@
-// 낙천적인 동기화
+// 게으른 동기화
 
 #include <thread>
 #include <iostream>
 #include <vector>
 #include <chrono>
 #include <mutex>
+#include <atomic>
 
 using namespace std;
 using namespace chrono;
@@ -21,8 +22,15 @@ public:
 	int key = 0;
 	Node* next = nullptr;
 	mutex nodeLock;
-	Node() {}
-	Node(int key_value) : key(key_value) { }
+	bool isRemoved; // marked
+
+	Node() {
+		next = NULL;
+		isRemoved = false;
+	}
+	Node(int key_value) : key(key_value) {
+		isRemoved = false;
+	}
 
 	~Node() {}
 
@@ -48,13 +56,7 @@ public:
 	}
 
 	bool is_valided(Node* pred, Node* curr) {
-		Node *node = &_head;
-		while (node->key <= pred->key) {
-			if (node == pred) 
-				return node->next == curr;
-			node = node->next;
-		}
-		return false;
+		return !pred->isRemoved && !curr->isRemoved && pred->next == curr;
 	}
 
 	bool Add(int key)
@@ -78,7 +80,7 @@ public:
 					curr->Unlock();
 					return false;
 				}
-				else {
+				else{
 					Node* node = new Node(key);
 					node->next = curr;
 					pred->next = node;
@@ -110,6 +112,7 @@ public:
 
 			pred->Lock();
 			curr->Lock();
+
 			if (is_valided(pred, curr)) {
 				if (curr->key != key) {
 					pred->Unlock();
@@ -117,6 +120,9 @@ public:
 					return false;
 				}
 				else {
+					curr->isRemoved = true;
+					// 순서 존나 중요해서 컴파일러나 cpu가 바꾸지 않도록 해야함
+					atomic_thread_fence(memory_order_seq_cst);
 					pred->next = curr->next;
 					pred->Unlock();
 					curr->Unlock();
@@ -131,34 +137,12 @@ public:
 		}
 	}
 
-	bool Contains(int key)
-	{
-		while (true) {
-
-
-			Node* pred, * curr;
-			pred = &_head;
-			curr = pred->next;
-
-			while (curr->key < key)
-			{
-				pred = curr;
-				curr = curr->next;
-			}
-
-			pred->Lock();
-			curr->Lock();
-			if (is_valided(pred, curr)) {
-				pred->Unlock();
-				curr->Unlock();
-				return curr->key == key;
-			}
-			else {
-				pred->Unlock();
-				curr->Unlock();
-				return false;
-			}
+	bool Contains(int key) {
+		Node* curr = &_head;
+		while (curr->key < key) {
+			curr = curr->next;
 		}
+		return curr->key == key && !curr->isRemoved;
 	}
 
 	void Display20() {
@@ -227,3 +211,12 @@ int main()
 
 	}
 }
+
+
+/*
+1	2276ms
+2	1361ms
+4	868ms
+8	690ms
+
+*/

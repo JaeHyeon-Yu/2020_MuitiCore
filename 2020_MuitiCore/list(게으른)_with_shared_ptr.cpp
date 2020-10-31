@@ -1,10 +1,11 @@
-// 낙천적인 동기화
+// 게으른 동기화 with shared ptr
 
 #include <thread>
 #include <iostream>
 #include <vector>
 #include <chrono>
 #include <mutex>
+#include <atomic>
 
 using namespace std;
 using namespace chrono;
@@ -19,10 +20,16 @@ class Node
 {
 public:
 	int key = 0;
-	Node* next = nullptr;
+	shared_ptr<Node> next = nullptr;
 	mutex nodeLock;
-	Node() {}
-	Node(int key_value) : key(key_value) { }
+	bool isRemoved; // marked
+
+	Node() {
+		isRemoved = false;
+	}
+	Node(int key_value) : key(key_value) {
+		isRemoved = false;
+	}
 
 	~Node() {}
 
@@ -36,32 +43,26 @@ public:
 
 class CList
 {
-	Node _head;
-	Node _tail;
+	shared_ptr<Node> _head;
+	shared_ptr<Node>_tail;
 
 public:
 	CList()
 	{
-		_head.key = 0x8000000;
-		_tail.key = 0xFFFFFFF;
-		_head.next = &_tail;
+		_head = make_shared<Node>(0x8000000);
+		_tail = make_shared<Node>(0xFFFFFFF);
+		_head->next = _tail;
 	}
 
-	bool is_valided(Node* pred, Node* curr) {
-		Node *node = &_head;
-		while (node->key <= pred->key) {
-			if (node == pred) 
-				return node->next == curr;
-			node = node->next;
-		}
-		return false;
+	bool is_valided(const shared_ptr<Node>& pred, const shared_ptr<Node>& curr) {	// &로 넘겨줘야 생성자 소멸자가 호출되지 않음
+		return !pred->isRemoved && !curr->isRemoved && pred->next == curr;
 	}
 
 	bool Add(int key)
 	{
 		while (true) {
-			Node* pred, * curr;
-			pred = &_head;
+			shared_ptr<Node> pred, curr;
+			pred = _head;
 			curr = pred->next;
 
 			while (curr->key < key)
@@ -79,7 +80,7 @@ public:
 					return false;
 				}
 				else {
-					Node* node = new Node(key);
+					shared_ptr<Node> node = make_shared<Node>(key);
 					node->next = curr;
 					pred->next = node;
 					pred->Unlock();
@@ -98,8 +99,8 @@ public:
 	bool Remove(int key)
 	{
 		while (true) {
-			Node* pred, * curr;;
-			pred = &_head;;
+			shared_ptr<Node> pred, curr;;
+			pred = _head;;
 			curr = pred->next;
 
 			while (curr->key < key)
@@ -110,6 +111,7 @@ public:
 
 			pred->Lock();
 			curr->Lock();
+
 			if (is_valided(pred, curr)) {
 				if (curr->key != key) {
 					pred->Unlock();
@@ -117,6 +119,9 @@ public:
 					return false;
 				}
 				else {
+					curr->isRemoved = true;
+					// 순서 존나 중요해서 컴파일러나 cpu가 바꾸지 않도록 해야함
+					atomic_thread_fence(memory_order_seq_cst);
 					pred->next = curr->next;
 					pred->Unlock();
 					curr->Unlock();
@@ -131,40 +136,18 @@ public:
 		}
 	}
 
-	bool Contains(int key)
-	{
-		while (true) {
-
-
-			Node* pred, * curr;
-			pred = &_head;
-			curr = pred->next;
-
-			while (curr->key < key)
-			{
-				pred = curr;
-				curr = curr->next;
-			}
-
-			pred->Lock();
-			curr->Lock();
-			if (is_valided(pred, curr)) {
-				pred->Unlock();
-				curr->Unlock();
-				return curr->key == key;
-			}
-			else {
-				pred->Unlock();
-				curr->Unlock();
-				return false;
-			}
+	bool Contains(int key) {
+		shared_ptr<Node> curr = _head;
+		while (curr->key < key) {
+			curr = curr->next;
 		}
+		return curr->key == key && !curr->isRemoved;
 	}
 
 	void Display20() {
-		Node* ptr = _head.next;
+		shared_ptr<Node> ptr = _head->next;
 		for (int i = 0; i < 20; ++i) {
-			if (ptr == &_tail) break;
+			if (ptr == _tail) break;
 			cout << ptr->key << ", ";
 			ptr = ptr->next;
 		}
@@ -172,13 +155,7 @@ public:
 	}
 
 	void Init() {
-		Node* ptr;
-		while (_head.next != &_tail)
-		{
-			ptr = _head.next;
-			_head.next = _head.next->next;
-			delete ptr;
-		}
+		_head->next = _tail;
 	}
 };
 
@@ -227,3 +204,12 @@ int main()
 
 	}
 }
+
+
+/*
+1	2276ms
+2	1361ms
+4	868ms
+8	690ms
+
+*/

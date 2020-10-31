@@ -42,5 +42,14 @@
     <ClCompile Include="list(낙천적인).cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="list(게으른).cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="list(게으른)_with_shared_ptr.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="list(비멈춤).cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
