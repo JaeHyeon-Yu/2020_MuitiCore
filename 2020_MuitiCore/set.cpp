@@ -218,7 +218,7 @@ public:
 	}
 };
 
-STL_SET clist;
+UN_SET clist;
 
 void ThreadFunc(int num_thread, int t_id)
 {
