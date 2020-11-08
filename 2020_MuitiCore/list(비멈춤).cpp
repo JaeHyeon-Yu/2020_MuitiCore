@@ -66,6 +66,7 @@ public:
 		*isRemoved = (1 == (v & 1));
 		return reinterpret_cast<LFNode*>(v & 0xFFFFFFFE);
 	}
+
 	bool CAS(LFNode* old_addr, LFNode* new_addr, bool old_mark, bool new_mark) {
 		int old_v = reinterpret_cast<int>(old_addr);
 		if (old_mark) old_v = old_v | 1;
@@ -117,9 +118,8 @@ public:
 			else {
 				LFNode* node = new LFNode(key);
 				node->next.SetNext(curr, false);
-				pred->next.CAS(curr, node, false, false);
-				
-				return true;
+				if (pred->next.CAS(curr, node, false, false))
+					return true;
 			}
 			
 		}
@@ -143,7 +143,7 @@ public:
 	}
 
 	bool Contains(int key) {
-		bool marks;
+		bool marks = false;
 		LFNode* curr = &_head;
 		while (curr->key < key) {
 			curr = curr->next.GetNext();
@@ -189,7 +189,7 @@ public:
 			}
 			if (curr->key >= key) return;
 			pred = curr;
-			curr = succ;
+			curr = curr->next.GetNext();
 		}
 	}
 
